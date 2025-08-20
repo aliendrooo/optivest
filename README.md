@@ -1,7 +1,6 @@
 # 📈 Optivest
 
 <div align="center">
-  <img src="./assets/logo-simple.svg" alt="Optivest Logo" width="200" height="200">
   
   **Smart Cryptocurrency Trading Assistant**
   
