@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optivest - Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: #718096;
+            margin-bottom: 20px;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 25px;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .status-running {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+
+        .status-stopped {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        }
+
+        .card h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            min-width: 0;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            border-radius: 15px;
+            border: 1px solid #e2e8f0;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .stat-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 5px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #718096;
+            font-weight: 500;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #a0aec0 0%, #718096 100%);
+            color: white;
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .table th,
+        .table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .table th {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .table tr:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .nav-links a {
+            padding: 10px 20px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            background: rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+
+        /* Dark Mode Styles */
+        body.dark-mode {
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .header {
+            background: rgba(45, 55, 72, 0.95);
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .header h1 {
+            color: #f7fafc;
+        }
+
+        body.dark-mode .header p {
+            color: #a0aec0;
+        }
+
+        body.dark-mode .card {
+            background: rgba(45, 55, 72, 0.95);
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .card h2 {
+            color: #f7fafc;
+        }
+
+        body.dark-mode .stat-item {
+            background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+            border: 1px solid #4a5568;
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .stat-value {
+            color: #f7fafc;
+        }
+
+        body.dark-mode .stat-label {
+            color: #a0aec0;
+        }
+
+        body.dark-mode .table-container {
+            background: rgba(45, 55, 72, 0.95);
+        }
+
+        body.dark-mode .table th {
+            background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+            color: #f7fafc;
+        }
+
+        body.dark-mode .table td {
+            border-bottom: 1px solid #4a5568;
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .table tr:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        body.dark-mode #darkModeToggle {
+            background: rgba(102, 126, 234, 0.2) !important;
+            color: #667eea !important;
+        }
+
+        body.dark-mode #darkModeToggle:hover {
+            background: rgba(102, 126, 234, 0.3) !important;
+        }
+
+        body.dark-mode .nav-links a {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+        }
+
+        body.dark-mode .nav-links a:hover {
+            background: rgba(102, 126, 234, 0.3);
+        }
+
+        /* Responsive tasarım için ek stiller */
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            
+            .stat-value {
+                font-size: 1.4rem;
+            }
+            
+            .stat-item {
+                padding: 12px;
+            }
+            
+            .card {
+                padding: 20px;
+            }
+            
+            .dashboard {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .header p {
+                font-size: 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stat-value {
+                font-size: 1.2rem;
+            }
+            
+            .stat-label {
+                font-size: 0.8rem;
+            }
+            
+            .card {
+                padding: 15px;
+            }
+            
+            .header h1 {
+                font-size: 1.8rem;
+            }
+            
+            .header p {
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                Optivest Dashboard
+            </h1>
+            <p>Gerçek zamanlı trading istatistikleri ve kontrol paneli</p>
+            <div class="nav-links">
+                <a href="/"><i class="fas fa-home"></i> Ana Sayfa</a>
+                <a href="/paper-trading"><i class="fas fa-gamepad"></i> Sanal Trading</a>
+                <a href="/system-status"><i class="fas fa-heartbeat"></i> Sistem Durumu</a>
+                <button id="darkModeToggle" class="btn btn-secondary" style="background: rgba(102, 126, 234, 0.1); color: #667eea; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 500; cursor: pointer; transition: all 0.3s ease;">
+                    <i class="fas fa-moon"></i> Dark Mode
+                </button>
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <div class="card">
+                <h2><i class="fas fa-wallet"></i> Bakiye Bilgileri</h2>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="totalBalance">$0.00</div>
+                        <div class="stat-label">Toplam Bakiye</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="profitLoss">$0.00</div>
+                        <div class="stat-label">Kar/Zarar</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-chart-bar"></i> Trading İstatistikleri</h2>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-value" id="totalTrades">0</div>
+                        <div class="stat-label">Toplam İşlem</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="successRate">0%</div>
+                        <div class="stat-label">Başarı Oranı</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-cog"></i> Sistem Kontrolleri</h2>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-success" onclick="startTrading()">
+                        <i class="fas fa-play"></i> Trading Başlat
+                    </button>
+                    <button class="btn btn-danger" onclick="stopTrading()">
+                        <i class="fas fa-stop"></i> Trading Durdur
+                    </button>
+                    <button class="btn btn-primary" onclick="refreshData()">
+                        <i class="fas fa-sync-alt"></i> Yenile
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><i class="fas fa-history"></i> Son İşlemler</h2>
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Tarih</th>
+                            <th>Çift</th>
+                            <th>İşlem</th>
+                            <th>Miktar</th>
+                            <th>Fiyat</th>
+                            <th>Durum</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tradesTable">
+                        <tr>
+                            <td colspan="6" style="text-align: center; color: #718096;">
+                                Henüz işlem bulunmuyor
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isRefreshing = false;
+
+        async function refreshData() {
+            if (isRefreshing) return;
+            
+            isRefreshing = true;
+            const refreshBtn = document.querySelector('.btn-primary');
+            const originalContent = refreshBtn.innerHTML;
+            refreshBtn.innerHTML = '<div class="loading"></div> Yenileniyor...';
+            
+            try {
+                // Bakiye bilgilerini al
+                const balanceResponse = await fetch('/api/paper-trading/balance');
+                if (balanceResponse.ok) {
+                    const balanceData = await balanceResponse.json();
+                    document.getElementById('totalBalance').textContent = `$${balanceData.totalValue.toFixed(2)}`;
+                    document.getElementById('profitLoss').textContent = `$${balanceData.profitLoss.toFixed(2)}`;
+                }
+
+                // Trading istatistiklerini al
+                const statsResponse = await fetch('/api/paper-trading/stats');
+                if (statsResponse.ok) {
+                    const statsData = await statsResponse.json();
+                    document.getElementById('totalTrades').textContent = statsData.totalTrades || 0;
+                    document.getElementById('successRate').textContent = `${statsData.successRate || 0}%`;
+                }
+
+                // Son işlemleri al
+                const tradesResponse = await fetch('/api/paper-trading/trades');
+                if (tradesResponse.ok) {
+                    const tradesData = await tradesResponse.json();
+                    updateTradesTable(tradesData.trades || []);
+                }
+
+            } catch (error) {
+                console.error('Veri yenileme hatası:', error);
+            } finally {
+                refreshBtn.innerHTML = originalContent;
+                isRefreshing = false;
+            }
+        }
+
+        function updateTradesTable(trades) {
+            const tbody = document.getElementById('tradesTable');
+            
+            if (trades.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: #718096;">
+                            Henüz işlem bulunmuyor
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = trades.map(trade => `
+                <tr>
+                    <td>${new Date(trade.timestamp).toLocaleString('tr-TR')}</td>
+                    <td>${trade.symbol}</td>
+                    <td>
+                        <span style="color: ${trade.side === 'BUY' ? '#48bb78' : '#f56565'}; font-weight: 600;">
+                            ${trade.side}
+                        </span>
+                    </td>
+                    <td>${trade.amount}</td>
+                    <td>$${trade.price}</td>
+                    <td>
+                        <span style="color: #48bb78; font-weight: 600;">
+                            ${trade.status}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function startTrading() {
+            try {
+                const response = await fetch('/api/paper-trading/start', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    alert('Trading başlatıldı!');
+                    refreshData();
+                } else {
+                    alert('Trading başlatılamadı!');
+                }
+            } catch (error) {
+                console.error('Trading başlatma hatası:', error);
+                alert('Trading başlatılamadı!');
+            }
+        }
+
+        async function stopTrading() {
+            try {
+                const response = await fetch('/api/paper-trading/stop', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    alert('Trading durduruldu!');
+                    refreshData();
+                } else {
+                    alert('Trading durdurulamadı!');
+                }
+            } catch (error) {
+                console.error('Trading durdurma hatası:', error);
+                alert('Trading durdurulamadı!');
+            }
+        }
+
+        // Dark Mode Toggle Function
+        function toggleDarkMode() {
+            const body = document.body;
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            const icon = darkModeToggle.querySelector('i');
+            
+            if (body.classList.contains('dark-mode')) {
+                body.classList.remove('dark-mode');
+                icon.className = 'fas fa-moon';
+                darkModeToggle.innerHTML = '<i class="fas fa-moon"></i> Dark Mode';
+                localStorage.setItem('darkMode', 'false');
+            } else {
+                body.classList.add('dark-mode');
+                icon.className = 'fas fa-sun';
+                darkModeToggle.innerHTML = '<i class="fas fa-sun"></i> Light Mode';
+                localStorage.setItem('darkMode', 'true');
+            }
+        }
+
+        // Load Dark Mode Preference
+        function loadDarkModePreference() {
+            const darkMode = localStorage.getItem('darkMode');
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            
+            if (darkMode === 'true') {
+                document.body.classList.add('dark-mode');
+                darkModeToggle.innerHTML = '<i class="fas fa-sun"></i> Light Mode';
+            }
+        }
+
+        // Sayfa yüklendiğinde verileri al
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDarkModePreference(); // Dark mode tercihini yükle
+            document.getElementById('darkModeToggle').addEventListener('click', toggleDarkMode);
+            
+            refreshData();
+            
+            // Her 30 saniyede bir otomatik yenile
+            setInterval(refreshData, 30000);
+        });
+    </script>
+</body>
+</html> 

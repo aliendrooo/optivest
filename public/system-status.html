@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optivest - Sistem Durumu</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: #718096;
+            margin-bottom: 20px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .nav-links a {
+            padding: 10px 20px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 10px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            background: rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        }
+
+        .card h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            min-width: 0;
+        }
+
+        .status-item {
+            text-align: center;
+            padding: 15px;
+            border-radius: 15px;
+            border: 2px solid;
+            font-weight: 600;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .status-item.healthy {
+            background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
+            border-color: #48bb78;
+            color: #22543d;
+        }
+
+        .status-item.warning {
+            background: linear-gradient(135deg, #fef5e7 0%, #fbd38d 100%);
+            border-color: #ed8936;
+            color: #744210;
+        }
+
+        .status-item.error {
+            background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
+            border-color: #f56565;
+            color: #742a2a;
+        }
+
+        .status-item.offline {
+            background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%);
+            border-color: #a0aec0;
+            color: #4a5568;
+        }
+
+        .status-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        .status-label {
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .table-container {
+            overflow-x: auto;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .table th,
+        .table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .table th {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            font-weight: 600;
+            color: #2d3748;
+        }
+
+        .table tr:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .alert-success {
+            background-color: #c6f6d5;
+            color: #22543d;
+            border: 1px solid #9ae6b4;
+        }
+
+        .alert-error {
+            background-color: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #feb2b2;
+        }
+
+        .alert-warning {
+            background-color: #fef5e7;
+            color: #744210;
+            border: 1px solid #fbd38d;
+        }
+
+        /* Dark Mode Styles */
+        body.dark-mode {
+            background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .header {
+            background: rgba(45, 55, 72, 0.95);
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .header h1 {
+            color: #f7fafc;
+        }
+
+        body.dark-mode .header p {
+            color: #a0aec0;
+        }
+
+        body.dark-mode .card {
+            background: rgba(45, 55, 72, 0.95);
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .card h2 {
+            color: #f7fafc;
+        }
+
+        body.dark-mode .table-container {
+            background: rgba(45, 55, 72, 0.95);
+        }
+
+        body.dark-mode .table th {
+            background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+            color: #f7fafc;
+        }
+
+        body.dark-mode .table td {
+            border-bottom: 1px solid #4a5568;
+            color: #e2e8f0;
+        }
+
+        body.dark-mode .table tr:hover {
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        body.dark-mode #darkModeToggle {
+            background: rgba(102, 126, 234, 0.2) !important;
+            color: #667eea !important;
+        }
+
+        body.dark-mode #darkModeToggle:hover {
+            background: rgba(102, 126, 234, 0.3) !important;
+        }
+
+        body.dark-mode .nav-links a {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+        }
+
+        body.dark-mode .nav-links a:hover {
+            background: rgba(102, 126, 234, 0.3);
+        }
+
+        /* Responsive tasarım için ek stiller */
+        @media (max-width: 768px) {
+            .status-grid {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            
+            .status-value {
+                font-size: 1.2rem;
+            }
+            
+            .status-item {
+                padding: 12px;
+            }
+            
+            .card {
+                padding: 20px;
+            }
+            
+            .dashboard {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .header p {
+                font-size: 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .status-value {
+                font-size: 1.1rem;
+            }
+            
+            .status-label {
+                font-size: 0.8rem;
+            }
+            
+            .card {
+                padding: 15px;
+            }
+            
+            .header h1 {
+                font-size: 1.8rem;
+            }
+            
+            .header p {
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                <i class="fas fa-heartbeat"></i>
+                Sistem Durumu
+            </h1>
+            <p>Sunucu, API'ler ve trading sisteminin gerçek zamanlı durumu</p>
+            
+            <div class="nav-links">
+                <a href="/"><i class="fas fa-home"></i> Ana Sayfa</a>
+                <a href="/paper-trading"><i class="fas fa-gamepad"></i> Sanal Trading</a>
+                <a href="/dashboard"><i class="fas fa-chart-line"></i> Dashboard</a>
+                <button id="darkModeToggle" class="btn btn-secondary" style="background: rgba(102, 126, 234, 0.1); color: #667eea; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 500; cursor: pointer; transition: all 0.3s ease;">
+                    <i class="fas fa-moon"></i> Dark Mode
+                </button>
+            </div>
+        </div>
+
+        <div id="alertContainer"></div>
+
+        <div class="dashboard">
+            <div class="card">
+                <h2><i class="fas fa-server"></i> Sunucu Durumu</h2>
+                <div class="status-grid">
+                    <div class="status-item" id="serverStatus">
+                        <div class="status-value">Kontrol Ediliyor...</div>
+                        <div class="status-label">Sunucu</div>
+                    </div>
+                    <div class="status-item" id="uptimeStatus">
+                        <div class="status-value">-</div>
+                        <div class="status-label">Çalışma Süresi</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-plug"></i> API Durumu</h2>
+                <div class="status-grid">
+                    <div class="status-item" id="binanceApiStatus">
+                        <div class="status-value">Kontrol Ediliyor...</div>
+                        <div class="status-label">Binance API</div>
+                    </div>
+                    <div class="status-item" id="coingeckoApiStatus">
+                        <div class="status-value">Kontrol Ediliyor...</div>
+                        <div class="status-label">CoinGecko API</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-chart-line"></i> Trading Sistemi</h2>
+                <div class="status-grid">
+                    <div class="status-item" id="tradingStatus">
+                        <div class="status-value">Kontrol Ediliyor...</div>
+                        <div class="status-label">Trading Durumu</div>
+                    </div>
+                    <div class="status-item" id="paperTradingStatus">
+                        <div class="status-value">Kontrol Ediliyor...</div>
+                        <div class="status-label">Sanal Trading</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2><i class="fas fa-database"></i> Veri Durumu</h2>
+                <div class="status-grid">
+                    <div class="status-item" id="dataStorageStatus">
+                        <div class="status-value">Kontrol Ediliyor...</div>
+                        <div class="status-label">Veri Saklama</div>
+                    </div>
+                    <div class="status-item" id="priceDataStatus">
+                        <div class="status-value">Kontrol Ediliyor...</div>
+                        <div class="status-label">Fiyat Verileri</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><i class="fas fa-info-circle"></i> Sistem Bilgileri</h2>
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Özellik</th>
+                            <th>Değer</th>
+                            <th>Durum</th>
+                            <th>Son Güncelleme</th>
+                        </tr>
+                    </thead>
+                    <tbody id="systemInfoTable">
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: #718096;">
+                                Sistem bilgileri yükleniyor...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2><i class="fas fa-cogs"></i> Sistem Kontrolleri</h2>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-primary" onclick="refreshSystemStatus()">
+                    <i class="fas fa-sync-alt"></i> Durumu Yenile
+                </button>
+                <button class="btn btn-primary" onclick="testAllApis()">
+                    <i class="fas fa-vial"></i> API Testleri
+                </button>
+                <button class="btn btn-primary" onclick="showSystemLogs()">
+                    <i class="fas fa-file-alt"></i> Sistem Logları
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isRefreshing = false;
+
+        // Dark Mode Toggle Function
+        function toggleDarkMode() {
+            const body = document.body;
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            const icon = darkModeToggle.querySelector('i');
+            
+            if (body.classList.contains('dark-mode')) {
+                body.classList.remove('dark-mode');
+                icon.className = 'fas fa-moon';
+                darkModeToggle.innerHTML = '<i class="fas fa-moon"></i> Dark Mode';
+                localStorage.setItem('darkMode', 'false');
+            } else {
+                body.classList.add('dark-mode');
+                icon.className = 'fas fa-sun';
+                darkModeToggle.innerHTML = '<i class="fas fa-sun"></i> Light Mode';
+                localStorage.setItem('darkMode', 'true');
+            }
+        }
+
+        // Load Dark Mode Preference
+        function loadDarkModePreference() {
+            const darkMode = localStorage.getItem('darkMode');
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            
+            if (darkMode === 'true') {
+                document.body.classList.add('dark-mode');
+                darkModeToggle.innerHTML = '<i class="fas fa-sun"></i> Light Mode';
+            }
+        }
+
+        // Sistem durumunu kontrol et
+        async function checkSystemStatus() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                
+                updateStatusItem('serverStatus', 'healthy', 'Çalışıyor', 'Sunucu');
+                updateStatusItem('uptimeStatus', 'healthy', formatUptime(data.uptime), 'Çalışma Süresi');
+                
+                return data;
+            } catch (error) {
+                updateStatusItem('serverStatus', 'error', 'Hata', 'Sunucu');
+                updateStatusItem('uptimeStatus', 'error', 'Bilinmiyor', 'Çalışma Süresi');
+                return null;
+            }
+        }
+
+        // API durumlarını kontrol et
+        async function checkApiStatus() {
+            // Binance API kontrolü
+            try {
+                const response = await fetch('/api/status');
+                if (response.ok) {
+                    updateStatusItem('binanceApiStatus', 'healthy', 'Bağlı', 'Binance API');
+                } else {
+                    updateStatusItem('binanceApiStatus', 'warning', 'Sınırlı', 'Binance API');
+                }
+            } catch (error) {
+                updateStatusItem('binanceApiStatus', 'error', 'Bağlantı Yok', 'Binance API');
+            }
+
+            // CoinGecko API kontrolü
+            try {
+                const response = await fetch('/api/prices');
+                if (response.ok) {
+                    updateStatusItem('coingeckoApiStatus', 'healthy', 'Bağlı', 'CoinGecko API');
+                } else {
+                    updateStatusItem('coingeckoApiStatus', 'warning', 'Sınırlı', 'CoinGecko API');
+                }
+            } catch (error) {
+                updateStatusItem('coingeckoApiStatus', 'error', 'Bağlantı Yok', 'CoinGecko API');
+            }
+        }
+
+        // Trading durumunu kontrol et
+        async function checkTradingStatus() {
+            try {
+                const response = await fetch('/api/paper-trading/trading-status');
+                const data = await response.json();
+                
+                if (data.success && data.data.isRunning) {
+                    updateStatusItem('tradingStatus', 'healthy', 'Aktif', 'Trading Durumu');
+                } else {
+                    updateStatusItem('tradingStatus', 'offline', 'Durduruldu', 'Trading Durumu');
+                }
+                
+                updateStatusItem('paperTradingStatus', 'healthy', 'Aktif', 'Sanal Trading');
+            } catch (error) {
+                updateStatusItem('tradingStatus', 'error', 'Hata', 'Trading Durumu');
+                updateStatusItem('paperTradingStatus', 'error', 'Hata', 'Sanal Trading');
+            }
+        }
+
+        // Veri durumunu kontrol et
+        async function checkDataStatus() {
+            try {
+                const response = await fetch('/api/paper-trading/balance');
+                if (response.ok) {
+                    updateStatusItem('dataStorageStatus', 'healthy', 'Çalışıyor', 'Veri Saklama');
+                } else {
+                    updateStatusItem('dataStorageStatus', 'warning', 'Sınırlı', 'Veri Saklama');
+                }
+            } catch (error) {
+                updateStatusItem('dataStorageStatus', 'error', 'Hata', 'Veri Saklama');
+            }
+
+            try {
+                const response = await fetch('/api/prices');
+                if (response.ok) {
+                    updateStatusItem('priceDataStatus', 'healthy', 'Güncel', 'Fiyat Verileri');
+                } else {
+                    updateStatusItem('priceDataStatus', 'warning', 'Eski', 'Fiyat Verileri');
+                }
+            } catch (error) {
+                updateStatusItem('priceDataStatus', 'error', 'Hata', 'Fiyat Verileri');
+            }
+        }
+
+        // Sistem bilgilerini güncelle
+        async function updateSystemInfo() {
+            try {
+                const [healthData, balanceData] = await Promise.all([
+                    fetch('/health').then(r => r.json()),
+                    fetch('/api/paper-trading/balance').then(r => r.json())
+                ]);
+
+                const tbody = document.getElementById('systemInfoTable');
+                tbody.innerHTML = `
+                    <tr>
+                        <td>Sunucu Durumu</td>
+                        <td>${healthData.status}</td>
+                        <td><span style="color: #48bb78;">✅ Aktif</span></td>
+                        <td>${new Date(healthData.timestamp).toLocaleString('tr-TR')}</td>
+                    </tr>
+                    <tr>
+                        <td>Çalışma Süresi</td>
+                        <td>${formatUptime(healthData.uptime)}</td>
+                        <td><span style="color: #48bb78;">✅ Stabil</span></td>
+                        <td>${new Date().toLocaleString('tr-TR')}</td>
+                    </tr>
+                    <tr>
+                        <td>Environment</td>
+                        <td>${healthData.environment || 'development'}</td>
+                        <td><span style="color: #ed8936;">⚠️ Test</span></td>
+                        <td>${new Date().toLocaleString('tr-TR')}</td>
+                    </tr>
+                    <tr>
+                        <td>Sanal Bakiye</td>
+                        <td>$${balanceData.success ? balanceData.totalValue?.toFixed(2) || '0.00' : '0.00'}</td>
+                        <td><span style="color: #48bb78;">✅ Mevcut</span></td>
+                        <td>${new Date().toLocaleString('tr-TR')}</td>
+                    </tr>
+                    <tr>
+                        <td>Toplam İşlem</td>
+                        <td>${balanceData.success ? (balanceData.totalTrades || 0) : 0}</td>
+                        <td><span style="color: #48bb78;">✅ Aktif</span></td>
+                        <td>${new Date().toLocaleString('tr-TR')}</td>
+                    </tr>
+                `;
+            } catch (error) {
+                const tbody = document.getElementById('systemInfoTable');
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" style="text-align: center; color: #f56565;">
+                            Sistem bilgileri alınamadı: ${error.message}
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        // Durum öğesini güncelle
+        function updateStatusItem(elementId, status, value, label) {
+            const element = document.getElementById(elementId);
+            element.className = `status-item ${status}`;
+            element.innerHTML = `
+                <div class="status-value">${value}</div>
+                <div class="status-label">${label}</div>
+            `;
+        }
+
+        // Uptime formatla
+        function formatUptime(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (days > 0) {
+                return `${days}g ${hours}s ${minutes}d`;
+            } else if (hours > 0) {
+                return `${hours}s ${minutes}d`;
+            } else {
+                return `${minutes} dakika`;
+            }
+        }
+
+        // Tüm sistem durumunu yenile
+        async function refreshSystemStatus() {
+            if (isRefreshing) return;
+            
+            isRefreshing = true;
+            showAlert('Sistem durumu kontrol ediliyor...', 'info');
+            
+            try {
+                await Promise.all([
+                    checkSystemStatus(),
+                    checkApiStatus(),
+                    checkTradingStatus(),
+                    checkDataStatus(),
+                    updateSystemInfo()
+                ]);
+                
+                showAlert('Sistem durumu güncellendi!', 'success');
+            } catch (error) {
+                showAlert('Sistem durumu kontrol edilirken hata oluştu!', 'error');
+            } finally {
+                isRefreshing = false;
+            }
+        }
+
+        // API testleri
+        async function testAllApis() {
+            showAlert('API testleri başlatılıyor...', 'info');
+            
+            const apis = [
+                { name: 'Health Check', url: '/health' },
+                { name: 'System Status', url: '/api/status' },
+                { name: 'Paper Trading Balance', url: '/api/paper-trading/balance' },
+                { name: 'Paper Trading Status', url: '/api/paper-trading/trading-status' },
+                { name: 'Price Data', url: '/api/prices' }
+            ];
+
+            let results = [];
+            
+            for (const api of apis) {
+                try {
+                    const start = Date.now();
+                    const response = await fetch(api.url);
+                    const end = Date.now();
+                    const duration = end - start;
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success !== false) {
+                            results.push(`✅ ${api.name}: ${duration}ms`);
+                        } else {
+                            results.push(`❌ ${api.name}: ${data.error || 'Hata'}`);
+                        }
+                    } else {
+                        results.push(`❌ ${api.name}: ${response.status}`);
+                    }
+                } catch (error) {
+                    results.push(`❌ ${api.name}: Bağlantı hatası`);
+                }
+            }
+            
+            showAlert(`API Test Sonuçları:\n${results.join('\n')}`, 'info');
+        }
+
+        // Sistem logları
+        function showSystemLogs() {
+            showAlert('Sistem logları konsol üzerinden görüntülenebilir. F12 tuşuna basarak Developer Tools\'u açın.', 'info');
+        }
+
+        // Alert göster
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            document.getElementById('alertContainer').appendChild(alertDiv);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        // Sayfa yüklendiğinde
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDarkModePreference();
+            document.getElementById('darkModeToggle').addEventListener('click', toggleDarkMode);
+            
+            refreshSystemStatus();
+            
+            // Her 30 saniyede bir otomatik yenile
+            setInterval(refreshSystemStatus, 30000);
+        });
+    </script>
+</body>
+</html> 
