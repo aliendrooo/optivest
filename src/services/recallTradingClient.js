@@ -3,23 +3,29 @@ const axios = require('axios');
 /**
  * Recall Network Trading Client
  * Recall competition platformu ile entegrasyon için
+ * 🏆 PRODUCTION READY - Competition başlıyor!
  */
 class RecallTradingClient {
     constructor(apiKey, environment = 'production') {
         this.apiKey = apiKey;
         this.environment = environment;
         
-        // Doğru API URL'leri - Recall Network dokümantasyonuna göre
+        // 🏆 PRODUCTION ENDPOINTS - Competition için güncellendi
         this.baseURL = environment === 'sandbox'
             ? 'https://api.sandbox.competitions.recall.network'
             : 'https://api.competitions.recall.network/api';
+        
+        // 🎯 Competition özel endpoint'i
+        this.tradeExecuteURL = 'https://api.competitions.recall.network/api/trade/execute';
         
         this.client = axios.create({
             baseURL: this.baseURL,
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`,
-                'X-API-Key': apiKey
+                'X-API-Key': apiKey,
+                'User-Agent': 'Optivest-TradingAgent/1.0.0',
+                'Accept': 'application/json'
             },
             timeout: 30000,
             validateStatus: function (status) {
@@ -28,9 +34,11 @@ class RecallTradingClient {
             }
         });
 
-        console.log(`🔗 Recall Trading Client initialized (${environment})`);
+        console.log(`🏆 Recall Trading Client initialized (${environment}) - COMPETITION MODE`);
         console.log(`📡 API Base URL: ${this.baseURL}`);
+        console.log(`🎯 Trade Execute URL: ${this.tradeExecuteURL}`);
         console.log(`🔑 API Key: ${apiKey.substring(0, 8)}...`);
+        console.log(`⏰ Competition: 30 dakika içinde başlıyor!`);
     }
 
     /**
@@ -104,13 +112,14 @@ class RecallTradingClient {
     }
 
     /**
-     * Trade gerçekleştir
+     * Trade gerçekleştir - 🏆 COMPETITION MODE
      */
     async executeTrade(fromToken, toToken, amount, fromChain = null, toChain = null) {
         try {
-            console.log(`🔄 Recall: Trade başlatılıyor...`);
+            console.log(`🏆 COMPETITION: Trade başlatılıyor...`);
             console.log(`📤 From: ${fromToken} (${amount})`);
             console.log(`📥 To: ${toToken}`);
+            console.log(`🎯 Using Production Endpoint: ${this.tradeExecuteURL}`);
             
             const trade = {
                 fromToken,
@@ -120,7 +129,17 @@ class RecallTradingClient {
                 toChain: toChain || null
             };
 
-            const response = await this.client.post('/trade/execute', trade);
+            // 🎯 Competition için özel endpoint kullan
+            const response = await axios.post(this.tradeExecuteURL, trade, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.apiKey}`,
+                    'X-API-Key': this.apiKey,
+                    'User-Agent': 'Optivest-TradingAgent/1.0.0',
+                    'Accept': 'application/json'
+                },
+                timeout: 30000
+            });
             
             if (response.data.success) {
                 console.log('✅ Trade başarıyla gerçekleşti!');

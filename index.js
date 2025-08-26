@@ -14,19 +14,20 @@ if (!fs.existsSync('.env')) {
 
 require('dotenv').config();
 
-// Environment variables check
-console.log('🔧 Environment Check:');
+// 🏆 Environment variables check - COMPETITION MODE
+console.log('🏆 COMPETITION Environment Check:');
 console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
 console.log(`   BINANCE_API_KEY: ${process.env.BINANCE_API_KEY ? '✅ Loaded' : '❌ Missing (Not required for virtual trading)'}`);
 console.log(`   BINANCE_SECRET_KEY: ${process.env.BINANCE_SECRET_KEY ? '✅ Loaded' : '❌ Missing (Not required for virtual trading)'}`);
-console.log(`   RECALL_API_KEY: ${process.env.RECALL_API_KEY ? '✅ Loaded' : '❌ Missing (Optional for Recall Network)'}`);
-console.log(`   RECALL_ENVIRONMENT: ${process.env.RECALL_ENVIRONMENT || 'production'}`);
+console.log(`   RECALL_API_KEY: ${process.env.RECALL_API_KEY ? '🏆 COMPETITION READY' : '❌ Missing (Required for Recall Network Competition)'}`);
+console.log(`   RECALL_ENVIRONMENT: ${process.env.RECALL_ENVIRONMENT || 'production'} 🎯`);
 console.log(`   PORT: ${process.env.PORT || '3000'}`);
-console.log('🎮 Virtual Trading Mode: Real prices + Virtual money');
+console.log('🏆 COMPETITION MODE: Production endpoints + Real trading');
+console.log('⏰ Competition starts in 30 minutes!');
 
 const apiRoutes = require('./src/routes/api');
 
-// Recall Trading Client'i yükle
+// 🏆 Recall Trading Client'i yükle - COMPETITION MODE
 let recallTradingClient = null;
 try {
     const RecallTradingClient = require('./src/services/recallTradingClient');
@@ -36,12 +37,15 @@ try {
     if (recallApiKey && recallApiKey !== 'your_recall_api_key_here') {
         recallTradingClient = new RecallTradingClient(recallApiKey, recallEnvironment);
         global.recallTradingClient = recallTradingClient; // Global erişim için
-        console.log('✅ Recall Trading Client yüklendi ve globale atandı');
+        console.log('🏆 Recall Trading Client yüklendi - COMPETITION MODE');
+        console.log('🎯 Production endpoints aktif');
+        console.log('⏰ Competition başlangıcına hazır!');
         
         // Bağlantı testi
         recallTradingClient.testConnection().then((result) => {
             if (result.success) {
                 console.log('🚀 Recall Network bağlantısı başarılı!');
+                console.log('🏆 Competition API hazır!');
             } else {
                 console.log('⚠️ Recall Network bağlantı hatası:', result.error);
             }
