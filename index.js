@@ -19,11 +19,43 @@ console.log('🔧 Environment Check:');
 console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
 console.log(`   BINANCE_API_KEY: ${process.env.BINANCE_API_KEY ? '✅ Loaded' : '❌ Missing (Not required for virtual trading)'}`);
 console.log(`   BINANCE_SECRET_KEY: ${process.env.BINANCE_SECRET_KEY ? '✅ Loaded' : '❌ Missing (Not required for virtual trading)'}`);
+console.log(`   RECALL_API_KEY: ${process.env.RECALL_API_KEY ? '✅ Loaded' : '❌ Missing (Optional for Recall Network)'}`);
+console.log(`   RECALL_ENVIRONMENT: ${process.env.RECALL_ENVIRONMENT || 'production'}`);
 console.log(`   PORT: ${process.env.PORT || '3000'}`);
 console.log('🎮 Virtual Trading Mode: Real prices + Virtual money');
 
 const apiRoutes = require('./src/routes/api');
-const paperTradingRoutes = require('./src/routes/paperTrading');
+
+// Recall Trading Client'i yükle
+let recallTradingClient = null;
+try {
+    const RecallTradingClient = require('./src/services/recallTradingClient');
+    const recallApiKey = process.env.RECALL_API_KEY;
+    const recallEnvironment = process.env.RECALL_ENVIRONMENT || 'production';
+
+    if (recallApiKey && recallApiKey !== 'your_recall_api_key_here') {
+        recallTradingClient = new RecallTradingClient(recallApiKey, recallEnvironment);
+        global.recallTradingClient = recallTradingClient; // Global erişim için
+        console.log('✅ Recall Trading Client yüklendi ve globale atandı');
+        
+        // Bağlantı testi
+        recallTradingClient.testConnection().then((result) => {
+            if (result.success) {
+                console.log('🚀 Recall Network bağlantısı başarılı!');
+            } else {
+                console.log('⚠️ Recall Network bağlantı hatası:', result.error);
+            }
+        }).catch(error => {
+            console.error('❌ Recall Network bağlantı testi hatası:', error.message);
+        });
+    } else {
+        console.log('⚠️ Recall API key bulunamadı - Recall Network özellikleri devre dışı');
+        global.recallTradingClient = null;
+    }
+} catch (error) {
+    console.error('❌ Recall Trading Client yüklenirken hata:', error.message);
+    global.recallTradingClient = null;
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -68,16 +100,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // API routes
 app.use('/api', apiRoutes);
-app.use('/api/paper-trading', paperTradingRoutes);
 
 // Ana sayfa
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Sanal trading sayfası
-app.get('/paper-trading', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'paper-trading.html'));
 });
 
 // İşlem Geçmişi sayfası
@@ -161,53 +187,28 @@ function startServer(port) {
 // Server'ı başlat
 const server = startServer(PORT);
 
-// Otomatik trading başlatma
-const paperTrading = require('./src/services/paperTrading');
+// Otomatik trading - Sadece Recall Network yarışmasında aktif olacak
+console.log('🎯 OTOMATİK TRADING - Sadece Recall Network yarışmasında aktif olacak');
+console.log('⏳ YARIŞMA BAŞLANGICINI BEKLİYOR...');
 
-// Her 15 saniyede bir trading stratejisi çalıştır - Dengeli agresif
+// Recall Network yarışma durumu kontrolü
 setInterval(async () => {
     try {
-        if (paperTrading.isTradingRunning()) {
-            console.log('🎯 DENGELİ AGRESIF sanal trading kontrolü başlatılıyor...');
-            await paperTrading.runPaperTradingStrategy();
+        const recallClient = global.recallTradingClient;
+        if (!recallClient) {
+            console.log('⚠️ Recall Network bağlantısı yok - Trading bekleniyor');
+            return;
+        }
+        const competitionStatus = await recallClient.getCompetitionStatus();
+        if (competitionStatus.isActive) {
+            console.log('🏆 YARIŞMA AKTİF - Otomatik trading başlatılıyor...');
+            await recallClient.runTradingStrategy();
         } else {
-            console.log('⚠️ Trading durmuş durumda, otomatik olarak başlatılıyor...');
-            paperTrading.startTrading();
+            console.log('⏳ YARIŞMA HENÜZ BAŞLAMADI - Bekleniyor...');
         }
     } catch (error) {
-        console.error('Otomatik trading hatası:', error.message);
+        console.error('Recall Network trading kontrolü hatası:', error.message);
     }
-}, 15 * 1000); // 15 saniye - Dengeli agresif
-
-// İlk trading'i hemen başlat
-setTimeout(async () => {
-    try {
-        console.log('🚀 HEMEN ULTRA AGRESİF trading başlatılıyor...');
-        // Trading'i aktif hale getir
-        paperTrading.startTrading(); // startTrading() metodunu kullan
-        console.log('✅ Trading aktifleştirildi!');
-        await paperTrading.runPaperTradingStrategy();
-        console.log('✅ Initial trading strategy executed!');
-    } catch (error) {
-        console.error('Initial trading error:', error.message);
-    }
-}, 3000); // Start after 3 seconds - accelerated
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received, shutting down server...');
-    server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
-    });
-});
-
-process.on('SIGINT', () => {
-    console.log('SIGINT signal received, shutting down server...');
-    server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
-    });
-});
+}, 30 * 1000); // 30 saniyede bir kontrol et
 
 module.exports = app; 

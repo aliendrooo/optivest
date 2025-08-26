@@ -29,62 +29,51 @@ router.get('/', (req, res) => {
                 transaction: '/api/blockchain/transaction/:network/:hash',
                 tokenBalance: '/api/blockchain/token-balance/:network/:tokenAddress'
             },
-            paperTrading: {
-                balance: '/api/paper-trading/balance',
-                start: '/api/paper-trading/start',
-                stop: '/api/paper-trading/stop',
-                reset: '/api/paper-trading/reset',
-                tradingStatus: '/api/paper-trading/trading-status'
-            },
+            // Paper trading endpoints kaldırıldı - Sadece Recall Network
             signals: '/api/signals'
         },
         timestamp: new Date().toISOString()
     });
 });
 
-// Coin fiyatları endpoint'i
+// Coin fiyatları endpoint'i - Recall Network'e yönlendirildi
 router.get('/prices', async (req, res) => {
     try {
-        // Önce WebSocket verilerini dene
-        const paperTrading = require('../services/paperTrading');
-        let prices = {};
+        const recallClient = global.recallTradingClient;
         
-        if (paperTrading.wsConnected && paperTrading.binanceWS) {
-            const wsPrice = paperTrading.binanceWS.getPrices();
-            prices = wsPrice;
-            console.log('📊 WebSocket fiyatları kullanılıyor');
-        }
-        
-        // Fallback: Trading engine verilerini kullan
-        if (Object.keys(prices).length === 0) {
-            prices = await tradingEngine.getSyntheticPrices();
-            console.log('📊 Fallback fiyatları kullanılıyor');
-        }
-        
-        // Eğer hala veri yoksa, varsayılan değerler sağla
-        if (Object.keys(prices).length === 0) {
-            const defaultPairs = ['BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'ADA/USDT', 'DOT/USDT', 'POL/USDT', 'AVAX/USDT', 'LINK/USDT'];
-            defaultPairs.forEach(pair => {
-                prices[pair] = {
-                    price: 0,
-                    change_24h: 0,
-                    symbol: pair,
-                    timestamp: Date.now()
-                };
+        if (!recallClient) {
+            return res.status(503).json({
+                success: false,
+                error: 'Recall Network bağlantısı yok - Fiyat verisi alınamıyor',
+                connected: false,
+                fallback: 'none'
             });
-            console.log('📊 Varsayılan fiyatlar kullanılıyor (WebSocket bağlantısı bekleniyor...)');
         }
-        
-        res.json({
-            success: true,
-            data: prices,
-            source: paperTrading.wsConnected ? 'websocket' : 'synthetic',
-            timestamp: new Date().toISOString()
-        });
+
+        // Recall Network'ten fiyat verilerini al
+        try {
+            const prices = await recallClient.getMarketPrices();
+            res.json({
+                success: true,
+                data: prices,
+                source: 'recall_network',
+                environment: recallClient.baseURL.includes('sandbox') ? 'sandbox' : 'production',
+                timestamp: new Date().toISOString()
+            });
+        } catch (priceError) {
+            console.error('📊 Recall Network fiyat hatası:', priceError.message);
+            res.status(500).json({
+                success: false,
+                error: 'Recall Network fiyat verisi alınamadı',
+                details: priceError.message
+            });
+        }
     } catch (error) {
+        console.error('📊 Fiyat endpoint hatası:', error);
         res.status(500).json({
             success: false,
-            error: error.message
+            error: error.message,
+            data: {}
         });
     }
 });
@@ -113,16 +102,23 @@ router.get('/status', async (req, res) => {
 
 router.post('/start', async (req, res) => {
     try {
-        // Önce geçersiz emirleri temizle
-        const paperTrading = require('../services/paperTrading');
-        paperTrading.cleanupInvalidOrders();
+        const recallClient = global.recallTradingClient;
         
-        // Trading stratejisini başlat
-        await tradingEngine.runTradingStrategy();
+        if (!recallClient) {
+            return res.status(503).json({
+                success: false,
+                error: 'Recall Network bağlantısı yok - Trading başlatılamıyor',
+                connected: false
+            });
+        }
+
+        // Recall Network trading stratejisini başlat
+        await recallClient.startTrading();
         
         res.json({
             success: true,
-            message: 'Trading stratejisi başlatıldı'
+            message: 'Recall Network trading stratejisi başlatıldı',
+            environment: recallClient.baseURL.includes('sandbox') ? 'sandbox' : 'production'
         });
     } catch (error) {
         res.status(500).json({
@@ -494,111 +490,11 @@ router.post('/defi/swap', async (req, res) => {
     }
 });
 
-// Paper Trading API endpoints
-const paperTrading = require('../services/paperTrading');
+// ===== PAPER TRADING SİSTEMİ KALDIRILDI =====
+// Sadece Recall Network yarışması için optimize edildi
 
-// Paper trading durumu
-router.get('/paper-trading/status', async (req, res) => {
-    try {
-        const isRunning = paperTrading.isTradingRunning();
-        const balance = paperTrading.virtualBalance;
-        const tradeHistory = paperTrading.getTradeHistory();
-        
-        res.json({
-            success: true,
-            data: {
-                isRunning,
-                status: isRunning ? "AKTİF" : "DURDURULDU",
-                balance,
-                totalTrades: tradeHistory.length,
-                lastUpdate: new Date().toISOString()
-            }
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// Paper trading başlatma
-router.post('/paper-trading/start', async (req, res) => {
-    try {
-        await paperTrading.runPaperTradingStrategy();
-        
-        res.json({
-            success: true,
-            message: 'Paper trading başlatıldı'
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// Paper trading durdurma
-router.post('/paper-trading/stop', async (req, res) => {
-    try {
-        paperTrading.stopTrading();
-        
-        res.json({
-            success: true,
-            message: 'Paper trading durduruldu'
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// Paper trading sıfırlama
-router.post('/paper-trading/reset', async (req, res) => {
-    try {
-        paperTrading.resetBalance();
-        
-        res.json({
-            success: true,
-            message: 'Paper trading bakiyesi sıfırlandı'
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-// Test trade yapma
-router.post('/paper-trading/test-trade', async (req, res) => {
-    try {
-        const { symbol, side, amount } = req.body;
-        
-        if (!symbol || !side || !amount) {
-            return res.status(400).json({
-                success: false,
-                error: 'Eksik parametreler: symbol, side, amount gerekli'
-            });
-        }
-        
-        const trade = await paperTrading.executePaperTrade(symbol, side, parseFloat(amount));
-        
-        res.json({
-            success: true,
-            data: trade,
-            message: 'Test trade başarıyla yapıldı'
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
+console.log('📋 PAPER TRADING SİSTEMİ KALDIRILDI');
+console.log('🎯 Agent artık sadece Recall Network yarışmasına odaklanıyor');
 
 // Coin listesi yönetimi
 router.get('/trading/coin-list', async (req, res) => {
@@ -642,20 +538,29 @@ router.post('/trading/regenerate-coins', async (req, res) => {
     }
 });
 
-// Trading sinyalleri endpoint'i
+// Trading sinyalleri endpoint'i - Paper trading kaldırıldı
 router.get('/signals', async (req, res) => {
     try {
-        const paperTrading = require('../services/paperTrading');
+        const recallClient = global.recallTradingClient;
         
-        // Son sinyal verilerini al
-        const signals = await paperTrading.getCurrentSignals();
+        if (!recallClient) {
+            return res.status(503).json({
+                success: false,
+                error: 'Recall Network bağlantısı yok - Sinyal verisi alınamıyor',
+                connected: false
+            });
+        }
+
+        // Recall Network'ten sinyal verilerini al
+        const signals = await recallClient.getSignals();
         
         res.json({
             success: true,
             data: {
                 signals: signals,
                 timestamp: new Date().toISOString(),
-                lastUpdate: new Date().toLocaleTimeString('tr-TR')
+                lastUpdate: new Date().toLocaleTimeString('tr-TR'),
+                source: 'recall_network'
             }
         });
     } catch (error) {
@@ -666,14 +571,351 @@ router.get('/signals', async (req, res) => {
     }
 });
 
-// Otomatik trading için cron job
-cron.schedule('*/5 * * * *', async () => {
+// ===== RECALL NETWORK API ENDPOINTS =====
+
+// Recall portfolio endpoint'i
+router.get('/recall/portfolio', async (req, res) => {
     try {
-        console.log('Otomatik trading kontrolü başlatılıyor...');
-        await tradingEngine.runTradingStrategy();
+        // Global recallTradingClient'e erişmeye çalış
+        const recallClient = global.recallTradingClient;
+        
+        if (!recallClient) {
+            return res.status(503).json({
+                success: false,
+                error: 'Recall API bağlantısı yok - API key kontrol edin',
+                connected: false,
+                fallback: 'paper_trading'
+            });
+        }
+
+        const portfolio = await recallClient.getPortfolio();
+        res.json({
+            success: true,
+            data: portfolio,
+            source: 'recall_network',
+            environment: recallClient.baseURL.includes('sandbox') ? 'sandbox' : 'production'
+        });
     } catch (error) {
-        console.error('Otomatik trading hatası:', error.message);
+        console.error('❌ Recall portfolio hatası:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            details: error.stack
+        });
     }
 });
+
+// Recall token price endpoint'i
+router.get('/recall/price', async (req, res) => {
+    try {
+        const { token, chain = 'evm', specificChain = 'eth' } = req.query;
+        
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                error: 'Token address gerekli'
+            });
+        }
+
+        const recallClient = global.recallTradingClient;
+        
+        if (!recallClient) {
+            return res.status(503).json({
+                success: false,
+                error: 'Recall API bağlantısı yok',
+                connected: false
+            });
+        }
+
+        const priceData = await recallClient.getTokenPrice(token, chain, specificChain);
+        res.json({
+            success: true,
+            data: priceData,
+            source: 'recall_network',
+            cached: false,
+            environment: recallClient.baseURL.includes('sandbox') ? 'sandbox' : 'production'
+        });
+    } catch (error) {
+        console.error('❌ Recall price hatası:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            details: error.stack
+        });
+    }
+});
+
+// Recall trade endpoint'i
+router.post('/recall/trade', async (req, res) => {
+    try {
+        const { fromToken, toToken, amount, fromChain, toChain } = req.body;
+        
+        if (!fromToken || !toToken || !amount) {
+            return res.status(400).json({
+                success: false,
+                error: 'fromToken, toToken ve amount gerekli'
+            });
+        }
+
+        const recallClient = global.recallTradingClient;
+        
+        if (!recallClient) {
+            return res.status(503).json({
+                success: false,
+                error: 'Recall API bağlantısı yok',
+                connected: false
+            });
+        }
+
+        const tradeResult = await recallClient.executeTrade(
+            fromToken, 
+            toToken, 
+            amount, 
+            fromChain, 
+            toChain
+        );
+        
+        res.json({
+            success: true,
+            data: tradeResult,
+            source: 'recall_network',
+            environment: recallClient.baseURL.includes('sandbox') ? 'sandbox' : 'production'
+        });
+    } catch (error) {
+        console.error('❌ Recall trade hatası:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            details: error.stack
+        });
+    }
+});
+
+// Recall leaderboard endpoint'i
+router.get('/recall/leaderboard', async (req, res) => {
+    try {
+        const recallClient = global.recallTradingClient;
+        
+        if (!recallClient) {
+            return res.status(503).json({
+                success: false,
+                error: 'Recall API bağlantısı yok',
+                connected: false
+            });
+        }
+
+        const leaderboard = await recallClient.getLeaderboard();
+        res.json({
+            success: true,
+            data: leaderboard,
+            source: 'recall_network',
+            environment: recallClient.baseURL.includes('sandbox') ? 'sandbox' : 'production'
+        });
+    } catch (error) {
+        console.error('❌ Recall leaderboard hatası:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            details: error.stack
+        });
+    }
+});
+
+// Recall connection test endpoint'i
+router.get('/recall/test', async (req, res) => {
+    try {
+        const recallClient = global.recallTradingClient;
+        
+        if (!recallClient) {
+            return res.json({
+                success: false,
+                connected: false,
+                message: 'Recall API key yapılandırılmamış',
+                environment: 'none'
+            });
+        }
+
+        // Bağlantı testi yap
+        const connectionResult = await recallClient.testConnection();
+        
+        // API Helper kullanarak detaylı test
+        const RecallApiHelper = require('../services/recallApiHelper');
+        const apiHelper = new RecallApiHelper(recallClient.apiKey, recallClient.baseURL.includes('sandbox') ? 'sandbox' : 'production');
+        
+        const healthCheck = await apiHelper.healthCheck();
+        const usageStats = apiHelper.getUsageStats();
+        
+        res.json({
+            success: connectionResult.success,
+            connected: connectionResult.success,
+            message: connectionResult.success ? 'Recall Network bağlantısı başarılı' : 'Recall Network bağlantı hatası',
+            environment: connectionResult.environment,
+            apiKey: connectionResult.apiKey,
+            baseURL: connectionResult.baseURL || recallClient.baseURL,
+            error: connectionResult.error,
+            healthCheck,
+            usageStats,
+            authentication: {
+                method: 'Bearer Token',
+                header: `Bearer ${recallClient.apiKey.substring(0, 8)}...`,
+                contentType: 'application/json'
+            }
+        });
+    } catch (error) {
+        res.json({
+            success: false,
+            connected: false,
+            error: error.message,
+            details: error.stack
+        });
+    }
+});
+
+// Token addresses helper endpoint'i
+router.get('/recall/tokens', (req, res) => {
+    try {
+        const RecallTradingClient = require('../services/recallTradingClient');
+        const tokens = RecallTradingClient.getTokenAddresses();
+        
+        res.json({
+            success: true,
+            data: tokens,
+            message: 'Popüler token adresleri'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// API Helper test endpoint'i
+router.get('/recall/api-helper-test', async (req, res) => {
+    try {
+        const recallClient = global.recallTradingClient;
+        
+        if (!recallClient) {
+            return res.status(503).json({
+                success: false,
+                error: 'Recall API bağlantısı yok'
+            });
+        }
+
+        const RecallApiHelper = require('../services/recallApiHelper');
+        const apiHelper = new RecallApiHelper(recallClient.apiKey, recallClient.baseURL.includes('sandbox') ? 'sandbox' : 'production');
+        
+        // Test API calls
+        const testCalls = [
+            { method: 'GET', endpoint: '/health', description: 'Health Check' },
+            { method: 'GET', endpoint: '/portfolio', description: 'Portfolio Test' }
+        ];
+        
+        const results = await apiHelper.batchCalls(testCalls);
+        
+        res.json({
+            success: true,
+            data: {
+                results,
+                usageStats: apiHelper.getUsageStats(),
+                environment: apiHelper.environment,
+                baseURL: apiHelper.baseURL
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            details: error.stack
+        });
+    }
+});
+
+// cURL örnekleri endpoint'i
+router.get('/recall/curl-examples', (req, res) => {
+    try {
+        const recallClient = global.recallTradingClient;
+        
+        if (!recallClient) {
+            return res.status(503).json({
+                success: false,
+                error: 'Recall API bağlantısı yok'
+            });
+        }
+
+        const apiKey = recallClient.apiKey;
+        const baseURL = recallClient.baseURL;
+        
+        const examples = {
+            portfolio: {
+                description: 'Portfolio bilgilerini al',
+                curl: `curl -X GET "${baseURL}/portfolio" \\\n  -H "Authorization: Bearer ${apiKey}" \\\n  -H "Content-Type: application/json"`,
+                javascript: `const response = await fetch('${baseURL}/portfolio', {\n  headers: {\n    'Authorization': 'Bearer ${apiKey}',\n    'Content-Type': 'application/json'\n  }\n});\nconst data = await response.json();`
+            },
+            price: {
+                description: 'Token fiyatını al',
+                curl: `curl -X GET "${baseURL}/price?token=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2&chain=evm&specificChain=eth" \\\n  -H "Authorization: Bearer ${apiKey}" \\\n  -H "Content-Type: application/json"`,
+                javascript: `const response = await fetch('${baseURL}/price?token=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2&chain=evm&specificChain=eth', {\n  headers: {\n    'Authorization': 'Bearer ${apiKey}',\n    'Content-Type': 'application/json'\n  }\n});\nconst data = await response.json();`
+            },
+            trade: {
+                description: 'Trade gerçekleştir',
+                curl: `curl -X POST "${baseURL}/trade/execute" \\\n  -H "Authorization: Bearer ${apiKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "fromToken": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",\n    "toToken": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",\n    "amount": "1.0"\n  }'`,
+                javascript: `const response = await fetch('${baseURL}/trade/execute', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'Bearer ${apiKey}',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    fromToken: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',\n    toToken: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',\n    amount: '1.0'\n  })\n});\nconst data = await response.json();`
+            },
+            leaderboard: {
+                description: 'Competition leaderboard al',
+                curl: `curl -X GET "${baseURL}/leaderboard" \\\n  -H "Authorization: Bearer ${apiKey}" \\\n  -H "Content-Type: application/json"`,
+                javascript: `const response = await fetch('${baseURL}/leaderboard', {\n  headers: {\n    'Authorization': 'Bearer ${apiKey}',\n    'Content-Type': 'application/json'\n  }\n});\nconst data = await response.json();`
+            }
+        };
+        
+        res.json({
+            success: true,
+            data: {
+                examples,
+                apiKey: `${apiKey.substring(0, 8)}...`,
+                baseURL,
+                environment: baseURL.includes('sandbox') ? 'sandbox' : 'production',
+                note: 'Bu örnekler Recall Network API dokümantasyonuna uygun olarak hazırlanmıştır'
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Otomatik trading için cron job - YARIŞMA BAŞLANGICINDA AKTİF OLACAK
+cron.schedule('*/5 * * * *', async () => {
+    try {
+        const recallClient = global.recallTradingClient;
+        
+        if (!recallClient) {
+            console.log('⚠️ Recall Network bağlantısı yok - Trading bekleniyor');
+            return;
+        }
+
+        // Yarışma durumunu kontrol et
+        const competitionStatus = await recallClient.getCompetitionStatus();
+        
+        if (competitionStatus.isActive) {
+            console.log('🏆 YARIŞMA AKTİF - Otomatik trading başlatılıyor...');
+            await recallClient.runTradingStrategy();
+        } else {
+            console.log('⏳ YARIŞMA HENÜZ BAŞLAMADI - Bekleniyor...');
+        }
+    } catch (error) {
+        console.error('❌ Otomatik trading hatası:', error.message);
+    }
+});
+
+console.log('🎯 YARIŞMA BAŞLANGICINDA OTOMATİK TRADING AKTİF OLACAK');
+console.log('📋 YARIŞMA BAŞLADIKTAN SONRA:');
+console.log('   1. .env dosyasını oluştur');
+console.log('   2. Server\'ı yeniden başlat');
+console.log('   3. Dashboard\'da "Test Connection" yap');
+console.log('   4. Otomatik trading zaten aktif!');
 
 module.exports = router; 

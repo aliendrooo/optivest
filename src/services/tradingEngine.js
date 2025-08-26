@@ -1,5 +1,5 @@
 const ccxt = require('ccxt');
-const { SMA, RSI, MACD } = require('technicalindicators');
+const { SMA, RSI, MACD, EMA, Stochastic, WilliamsR, CCI, ADX, BollingerBands } = require('technicalindicators');
 const blockchainConfig = require('../config/blockchain');
 
 // Pine Script Follow Line Stratejisi Sınıfı
@@ -188,6 +188,483 @@ class FollowLineStrategy {
     }
 }
 
+// Gelişmiş Scalping Stratejisi Sınıfı - Hızlı Kar İçin
+class AdvancedScalpingStrategy {
+    constructor() {
+        this.fastEma = 5;
+        this.slowEma = 13;
+        this.rsiPeriod = 14;
+        this.stochPeriod = 14;
+        this.minVolume = 1000000; // Minimum volume
+        this.scalperMode = true;
+    }
+
+    // Hızlı EMA Crossover sinyali
+    calculateEMACrossover(data) {
+        if (data.length < this.slowEma + 5) return null;
+
+        const closes = data.map(candle => candle.close);
+        const fastEmaValues = EMA.calculate({ period: this.fastEma, values: closes });
+        const slowEmaValues = EMA.calculate({ period: this.slowEma, values: closes });
+
+        if (fastEmaValues.length < 2 || slowEmaValues.length < 2) return null;
+
+        const currentFast = fastEmaValues[fastEmaValues.length - 1];
+        const currentSlow = slowEmaValues[slowEmaValues.length - 1];
+        const prevFast = fastEmaValues[fastEmaValues.length - 2];
+        const prevSlow = slowEmaValues[slowEmaValues.length - 2];
+
+        let signal = 'HOLD';
+        let confidence = 0;
+
+        // Golden Cross (Hızlı EMA yukarı kesiyor)
+        if (prevFast <= prevSlow && currentFast > currentSlow) {
+            signal = 'BUY';
+            confidence = 0.8;
+        }
+        // Death Cross (Hızlı EMA aşağı kesiyor)
+        else if (prevFast >= prevSlow && currentFast < currentSlow) {
+            signal = 'SELL';
+            confidence = 0.8;
+        }
+
+        return {
+            signal,
+            confidence,
+            fastEma: currentFast,
+            slowEma: currentSlow,
+            crossType: signal === 'BUY' ? 'Golden Cross' : signal === 'SELL' ? 'Death Cross' : 'No Cross'
+        };
+    }
+
+    // Stochastic Oscillator - Aşırı alım/satım tespiti
+    calculateStochastic(data) {
+        if (data.length < this.stochPeriod + 5) return null;
+
+        const stochInput = {
+            high: data.map(candle => candle.high),
+            low: data.map(candle => candle.low),
+            close: data.map(candle => candle.close),
+            period: this.stochPeriod,
+            signalPeriod: 3
+        };
+
+        const stochValues = Stochastic.calculate(stochInput);
+        if (stochValues.length === 0) return null;
+
+        const current = stochValues[stochValues.length - 1];
+        
+        let signal = 'HOLD';
+        let confidence = 0;
+
+        // Aşırı satım bölgesinden çıkış (scalping için daha agresif)
+        if (current.k < 25 && current.d < 25 && current.k > current.d) {
+            signal = 'BUY';
+            confidence = 0.7;
+        }
+        // Aşırı alım bölgesinden çıkış
+        else if (current.k > 75 && current.d > 75 && current.k < current.d) {
+            signal = 'SELL';
+            confidence = 0.7;
+        }
+
+        return {
+            signal,
+            confidence,
+            k: current.k,
+            d: current.d,
+            level: current.k < 20 ? 'Oversold' : current.k > 80 ? 'Overbought' : 'Normal'
+        };
+    }
+
+    // Volume Spike Detector - Anormal volume artışı
+    detectVolumeSpike(data) {
+        if (data.length < 20) return null;
+
+        const volumes = data.map(candle => candle.volume);
+        const avgVolume = volumes.slice(-20, -1).reduce((sum, vol) => sum + vol, 0) / 19;
+        const currentVolume = volumes[volumes.length - 1];
+
+        const volumeRatio = currentVolume / avgVolume;
+        
+        return {
+            isSpike: volumeRatio > 2.0, // 2x artış
+            ratio: volumeRatio,
+            confidence: Math.min(volumeRatio / 3, 1), // Max 1.0
+            currentVolume,
+            avgVolume
+        };
+    }
+
+    // Scalping sinyali üret
+    generateScalpingSignal(data) {
+        console.log(`⚡ === GELIŞMIŞ SCALPING STRATEJİSİ ===`);
+
+        const emaCross = this.calculateEMACrossover(data);
+        const stochastic = this.calculateStochastic(data);
+        const volumeSpike = this.detectVolumeSpike(data);
+
+        if (!emaCross || !stochastic || !volumeSpike) {
+            return {
+                signal: 'HOLD',
+                confidence: 0,
+                reason: 'Insufficient data'
+            };
+        }
+
+        let finalSignal = 'HOLD';
+        let totalConfidence = 0;
+        let reasons = [];
+
+        // EMA Crossover sinyali
+        if (emaCross.signal !== 'HOLD') {
+            if (finalSignal === 'HOLD') finalSignal = emaCross.signal;
+            else if (finalSignal === emaCross.signal) totalConfidence += emaCross.confidence;
+            
+            totalConfidence += emaCross.confidence * 0.4;
+            reasons.push(`EMA ${emaCross.crossType}`);
+            console.log(`📈 EMA Cross: ${emaCross.signal} (${emaCross.crossType})`);
+        }
+
+        // Stochastic sinyali
+        if (stochastic.signal !== 'HOLD') {
+            if (finalSignal === 'HOLD') finalSignal = stochastic.signal;
+            else if (finalSignal === stochastic.signal) totalConfidence += stochastic.confidence;
+            
+            totalConfidence += stochastic.confidence * 0.3;
+            reasons.push(`Stoch ${stochastic.level}`);
+            console.log(`🎯 Stochastic: ${stochastic.signal} (K: ${stochastic.k.toFixed(1)}, D: ${stochastic.d.toFixed(1)})`);
+        }
+
+        // Volume spike güçlendirmesi
+        if (volumeSpike.isSpike && finalSignal !== 'HOLD') {
+            totalConfidence += volumeSpike.confidence * 0.3;
+            reasons.push(`Volume Spike ${volumeSpike.ratio.toFixed(1)}x`);
+            console.log(`💥 Volume Spike: ${volumeSpike.ratio.toFixed(1)}x normal`);
+        }
+
+        // Scalping için minimum confidence
+        if (totalConfidence < 0.6) {
+            finalSignal = 'HOLD';
+            totalConfidence = 0;
+        }
+
+        const result = {
+            signal: finalSignal,
+            confidence: Math.min(totalConfidence, 1.0),
+            reasons: reasons.join(', '),
+            details: {
+                emaCross,
+                stochastic,
+                volumeSpike
+            }
+        };
+
+        console.log(`⚡ Scalping Signal: ${finalSignal} (Güven: ${(result.confidence * 100).toFixed(1)}%)`);
+        console.log(`📋 Reasons: ${result.reasons}`);
+
+        return result;
+    }
+}
+
+// Volume Profile ve Destek/Direnç Stratejisi
+class VolumeProfileStrategy {
+    constructor() {
+        this.lookbackPeriod = 100;
+        this.volumeThreshold = 1.5; // 1.5x average volume
+        this.priceZones = [];
+    }
+
+    // Volume Profile hesaplama
+    calculateVolumeProfile(data) {
+        if (data.length < this.lookbackPeriod) return null;
+
+        const recentData = data.slice(-this.lookbackPeriod);
+        const priceVolMap = new Map();
+
+        // Her fiyat seviyesindeki toplam volume'u hesapla
+        recentData.forEach(candle => {
+            const priceLevel = Math.round(candle.close * 100) / 100; // 2 decimal
+            const currentVol = priceVolMap.get(priceLevel) || 0;
+            priceVolMap.set(priceLevel, currentVol + candle.volume);
+        });
+
+        // Volume'a göre sırala
+        const sortedByVolume = Array.from(priceVolMap.entries())
+            .sort((a, b) => b[1] - a[1]);
+
+        // En yüksek volume'lu fiyat seviyeleri (POC - Point of Control)
+        const highVolumeZones = sortedByVolume.slice(0, 5);
+
+        return {
+            poc: highVolumeZones[0], // En yüksek volume fiyat
+            highVolumeZones,
+            totalVolume: Array.from(priceVolMap.values()).reduce((sum, vol) => sum + vol, 0)
+        };
+    }
+
+    // Destek/Direnç seviyelerini tespit et
+    findSupportResistance(data, volumeProfile) {
+        if (!volumeProfile) return null;
+
+        const currentPrice = data[data.length - 1].close;
+        const highVolumeZones = volumeProfile.highVolumeZones;
+
+        let nearestSupport = null;
+        let nearestResistance = null;
+
+        // En yakın destek ve direnç seviyelerini bul
+        highVolumeZones.forEach(([price, volume]) => {
+            if (price < currentPrice) {
+                if (!nearestSupport || price > nearestSupport.price) {
+                    nearestSupport = { price, volume, distance: currentPrice - price };
+                }
+            } else if (price > currentPrice) {
+                if (!nearestResistance || price < nearestResistance.price) {
+                    nearestResistance = { price, volume, distance: price - currentPrice };
+                }
+            }
+        });
+
+        return {
+            support: nearestSupport,
+            resistance: nearestResistance,
+            currentPrice
+        };
+    }
+
+    // Volume Profile sinyali üret
+    generateVolumeSignal(data) {
+        console.log(`📊 === VOLUME PROFILE STRATEJİSİ ===`);
+
+        const volumeProfile = this.calculateVolumeProfile(data);
+        const supportResistance = this.findSupportResistance(data, volumeProfile);
+
+        if (!volumeProfile || !supportResistance) {
+            return {
+                signal: 'HOLD',
+                confidence: 0,
+                reason: 'Insufficient volume data'
+            };
+        }
+
+        const currentPrice = supportResistance.currentPrice;
+        const { support, resistance } = supportResistance;
+
+        let signal = 'HOLD';
+        let confidence = 0;
+        let reason = '';
+
+        // Destek seviyesine yaklaşma (BUY sinyali)
+        if (support && support.distance < (currentPrice * 0.01)) { // %1 yakınlık
+            signal = 'BUY';
+            confidence = 0.7;
+            reason = `Strong support at $${support.price.toFixed(4)}`;
+            console.log(`🟢 Güçlü Destek Yakın: $${support.price.toFixed(4)} (Uzaklık: $${support.distance.toFixed(4)})`);
+        }
+
+        // Direnç seviyesine yaklaşma (SELL sinyali)
+        if (resistance && resistance.distance < (currentPrice * 0.01)) { // %1 yakınlık
+            signal = 'SELL';
+            confidence = 0.7;
+            reason = `Strong resistance at $${resistance.price.toFixed(4)}`;
+            console.log(`🔴 Güçlü Direnç Yakın: $${resistance.price.toFixed(4)} (Uzaklık: $${resistance.distance.toFixed(4)})`);
+        }
+
+        // POC (Point of Control) yakınlığı
+        const pocPrice = volumeProfile.poc[0];
+        const pocDistance = Math.abs(currentPrice - pocPrice);
+        if (pocDistance < (currentPrice * 0.005)) { // %0.5 yakınlık
+            confidence += 0.2; // Güven artırımı
+            reason += ` + Near POC $${pocPrice.toFixed(4)}`;
+            console.log(`🎯 POC Yakın: $${pocPrice.toFixed(4)}`);
+        }
+
+        return {
+            signal,
+            confidence: Math.min(confidence, 1.0),
+            reason,
+            details: {
+                volumeProfile,
+                supportResistance,
+                pocPrice
+            }
+        };
+    }
+}
+
+// Momentum ve Trend Gücü Stratejisi  
+class MomentumStrategy {
+    constructor() {
+        this.adxPeriod = 14;
+        this.cciPeriod = 20;
+        this.williamsRPeriod = 14;
+    }
+
+    // ADX (Average Directional Index) - Trend gücü
+    calculateADX(data) {
+        if (data.length < this.adxPeriod + 10) return null;
+
+        const adxInput = {
+            high: data.map(candle => candle.high),
+            low: data.map(candle => candle.low),
+            close: data.map(candle => candle.close),
+            period: this.adxPeriod
+        };
+
+        const adxValues = ADX.calculate(adxInput);
+        if (adxValues.length === 0) return null;
+
+        const current = adxValues[adxValues.length - 1];
+        
+        return {
+            adx: current.adx,
+            diPlus: current.diPlus,
+            diMinus: current.diMinus,
+            trendStrength: current.adx > 25 ? 'Strong' : current.adx > 20 ? 'Moderate' : 'Weak',
+            direction: current.diPlus > current.diMinus ? 'Bullish' : 'Bearish'
+        };
+    }
+
+    // CCI (Commodity Channel Index) - Momentum
+    calculateCCI(data) {
+        if (data.length < this.cciPeriod + 5) return null;
+
+        const cciInput = {
+            high: data.map(candle => candle.high),
+            low: data.map(candle => candle.low),
+            close: data.map(candle => candle.close),
+            period: this.cciPeriod
+        };
+
+        const cciValues = CCI.calculate(cciInput);
+        if (cciValues.length === 0) return null;
+
+        const current = cciValues[cciValues.length - 1];
+
+        let signal = 'HOLD';
+        let confidence = 0;
+
+        // CCI sinyalleri (daha agresif scalping için)
+        if (current < -150) { // Aşırı satım
+            signal = 'BUY';
+            confidence = 0.6;
+        } else if (current > 150) { // Aşırı alım
+            signal = 'SELL';
+            confidence = 0.6;
+        }
+
+        return {
+            cci: current,
+            signal,
+            confidence,
+            level: current < -100 ? 'Oversold' : current > 100 ? 'Overbought' : 'Normal'
+        };
+    }
+
+    // Williams %R - Momentum oscillator
+    calculateWilliamsR(data) {
+        if (data.length < this.williamsRPeriod + 5) return null;
+
+        const williamsInput = {
+            high: data.map(candle => candle.high),
+            low: data.map(candle => candle.low),
+            close: data.map(candle => candle.close),
+            period: this.williamsRPeriod
+        };
+
+        const williamsValues = WilliamsR.calculate(williamsInput);
+        if (williamsValues.length === 0) return null;
+
+        const current = williamsValues[williamsValues.length - 1];
+
+        let signal = 'HOLD';
+        let confidence = 0;
+
+        // Williams %R sinyalleri
+        if (current > -30) { // Aşırı alım bölgesi
+            signal = 'SELL';
+            confidence = 0.5;
+        } else if (current < -70) { // Aşırı satım bölgesi
+            signal = 'BUY';
+            confidence = 0.5;
+        }
+
+        return {
+            williamsR: current,
+            signal,
+            confidence,
+            level: current > -20 ? 'Overbought' : current < -80 ? 'Oversold' : 'Normal'
+        };
+    }
+
+    // Momentum sinyali üret
+    generateMomentumSignal(data) {
+        console.log(`🚀 === MOMENTUM STRATEJİSİ ===`);
+
+        const adx = this.calculateADX(data);
+        const cci = this.calculateCCI(data);
+        const williamsR = this.calculateWilliamsR(data);
+
+        if (!adx || !cci || !williamsR) {
+            return {
+                signal: 'HOLD',
+                confidence: 0,
+                reason: 'Insufficient momentum data'
+            };
+        }
+
+        let finalSignal = 'HOLD';
+        let totalConfidence = 0;
+        let reasons = [];
+
+        // ADX trend gücü kontrolü
+        const trendMultiplier = adx.adx > 25 ? 1.3 : adx.adx > 20 ? 1.1 : 0.8;
+        console.log(`📈 ADX: ${adx.adx.toFixed(1)} (${adx.trendStrength} trend, ${adx.direction})`);
+
+        // CCI sinyali
+        if (cci.signal !== 'HOLD') {
+            finalSignal = cci.signal;
+            totalConfidence += cci.confidence * trendMultiplier;
+            reasons.push(`CCI ${cci.level} (${cci.cci.toFixed(1)})`);
+            console.log(`🎯 CCI: ${cci.signal} (${cci.cci.toFixed(1)} - ${cci.level})`);
+        }
+
+        // Williams %R sinyali
+        if (williamsR.signal !== 'HOLD') {
+            if (finalSignal === williamsR.signal || finalSignal === 'HOLD') {
+                if (finalSignal === 'HOLD') finalSignal = williamsR.signal;
+                totalConfidence += williamsR.confidence * trendMultiplier;
+                reasons.push(`Williams%R ${williamsR.level} (${williamsR.williamsR.toFixed(1)})`);
+                console.log(`📊 Williams %R: ${williamsR.signal} (${williamsR.williamsR.toFixed(1)} - ${williamsR.level})`);
+            }
+        }
+
+        // Trend yönü ile uyum kontrolü
+        if (finalSignal === 'BUY' && adx.direction === 'Bearish') {
+            totalConfidence *= 0.7; // Trend tersine azaltım
+        } else if (finalSignal === 'SELL' && adx.direction === 'Bullish') {
+            totalConfidence *= 0.7; // Trend tersine azaltım
+        } else if (finalSignal !== 'HOLD' && 
+                   ((finalSignal === 'BUY' && adx.direction === 'Bullish') || 
+                    (finalSignal === 'SELL' && adx.direction === 'Bearish'))) {
+            totalConfidence *= 1.2; // Trend uyumlu artırım
+            reasons.push('Trend Aligned');
+        }
+
+        return {
+            signal: finalSignal,
+            confidence: Math.min(totalConfidence, 1.0),
+            reasons: reasons.join(', '),
+            details: {
+                adx,
+                cci,
+                williamsR
+            }
+        };
+    }
+}
+
 class TradingEngine {
     constructor() {
         this.exchanges = {
@@ -202,8 +679,11 @@ class TradingEngine {
             })
         };
         
-        // Follow Line stratejisi instance'ı
+        // Strateji instance'ları
         this.followLineStrategy = new FollowLineStrategy();
+        this.scalpingStrategy = new AdvancedScalpingStrategy();
+        this.volumeStrategy = new VolumeProfileStrategy();
+        this.momentumStrategy = new MomentumStrategy();
         
         // Trading modu kontrolü - Sanal trading varsayılan
         this.isRealTrading = false; // Sanal trading için false
@@ -625,6 +1105,119 @@ class TradingEngine {
         };
     }
 
+    // Gelişmiş Multi-Strateji Analizi
+    generateAdvancedSignal(marketData, symbol) {
+        console.log(`🎯 === GELİŞMİŞ MULTI-STRATEJİ ANALİZİ ===`);
+        console.log(`📊 Symbol: ${symbol}`);
+
+        // Tüm stratejilerden sinyal al
+        const followLineSignal = this.generateFollowLineSignal(marketData, symbol);
+        const scalpingSignal = this.scalpingStrategy.generateScalpingSignal(marketData.data);
+        const volumeSignal = this.volumeStrategy.generateVolumeSignal(marketData.data);
+        const momentumSignal = this.momentumStrategy.generateMomentumSignal(marketData.data);
+
+        // Sinyal ağırlıkları
+        const weights = {
+            followLine: 0.30,    // Pine Script Follow Line (Ana strateji)
+            scalping: 0.25,      // Hızlı EMA + Stochastic + Volume
+            volume: 0.25,        // Volume Profile + Support/Resistance  
+            momentum: 0.20       // ADX + CCI + Williams %R
+        };
+
+        let buyScore = 0;
+        let sellScore = 0;
+        let totalWeight = 0;
+        let activeStrategies = [];
+
+        // Follow Line stratejisi
+        if (followLineSignal.confidence > 0) {
+            totalWeight += weights.followLine;
+            if (followLineSignal.signal === 'BUY') {
+                buyScore += followLineSignal.confidence * weights.followLine;
+                activeStrategies.push(`Follow Line BUY (${(followLineSignal.confidence * 100).toFixed(1)}%)`);
+            } else if (followLineSignal.signal === 'SELL') {
+                sellScore += followLineSignal.confidence * weights.followLine;
+                activeStrategies.push(`Follow Line SELL (${(followLineSignal.confidence * 100).toFixed(1)}%)`);
+            }
+        }
+
+        // Scalping stratejisi  
+        if (scalpingSignal.confidence > 0) {
+            totalWeight += weights.scalping;
+            if (scalpingSignal.signal === 'BUY') {
+                buyScore += scalpingSignal.confidence * weights.scalping;
+                activeStrategies.push(`Scalping BUY (${(scalpingSignal.confidence * 100).toFixed(1)}%)`);
+            } else if (scalpingSignal.signal === 'SELL') {
+                sellScore += scalpingSignal.confidence * weights.scalping;
+                activeStrategies.push(`Scalping SELL (${(scalpingSignal.confidence * 100).toFixed(1)}%)`);
+            }
+        }
+
+        // Volume Profile stratejisi
+        if (volumeSignal.confidence > 0) {
+            totalWeight += weights.volume;
+            if (volumeSignal.signal === 'BUY') {
+                buyScore += volumeSignal.confidence * weights.volume;
+                activeStrategies.push(`Volume BUY (${(volumeSignal.confidence * 100).toFixed(1)}%)`);
+            } else if (volumeSignal.signal === 'SELL') {
+                sellScore += volumeSignal.confidence * weights.volume;
+                activeStrategies.push(`Volume SELL (${(volumeSignal.confidence * 100).toFixed(1)}%)`);
+            }
+        }
+
+        // Momentum stratejisi
+        if (momentumSignal.confidence > 0) {
+            totalWeight += weights.momentum;
+            if (momentumSignal.signal === 'BUY') {
+                buyScore += momentumSignal.confidence * weights.momentum;
+                activeStrategies.push(`Momentum BUY (${(momentumSignal.confidence * 100).toFixed(1)}%)`);
+            } else if (momentumSignal.signal === 'SELL') {
+                sellScore += momentumSignal.confidence * weights.momentum;
+                activeStrategies.push(`Momentum SELL (${(momentumSignal.confidence * 100).toFixed(1)}%)`);
+            }
+        }
+
+        // Final sinyal hesaplama
+        let finalSignal = 'HOLD';
+        let finalConfidence = 0;
+
+        if (totalWeight > 0) {
+            const buyStrength = buyScore / totalWeight;
+            const sellStrength = sellScore / totalWeight;
+
+            // Minimum confidence eşiği: 0.5 (daha seçici)
+            if (buyStrength > sellStrength && buyStrength > 0.5) {
+                finalSignal = 'BUY';
+                finalConfidence = buyStrength;
+            } else if (sellStrength > buyStrength && sellStrength > 0.5) {
+                finalSignal = 'SELL';
+                finalConfidence = sellStrength;
+            }
+        }
+
+        console.log(`\n🎯 === MULTI-STRATEJİ SONUCU ===`);
+        console.log(`📊 Aktif Stratejiler: ${activeStrategies.length}/4`);
+        activeStrategies.forEach(strategy => console.log(`   ✓ ${strategy}`));
+        console.log(`📈 BUY Skoru: ${(buyScore * 100).toFixed(1)}%`);
+        console.log(`📉 SELL Skoru: ${(sellScore * 100).toFixed(1)}%`);
+        console.log(`⚡ Final Sinyal: ${finalSignal} (Güven: ${(finalConfidence * 100).toFixed(1)}%)`);
+
+        return {
+            signal: finalSignal,
+            confidence: finalConfidence,
+            buyScore,
+            sellScore,
+            totalWeight,
+            activeStrategies,
+            details: {
+                followLine: followLineSignal,
+                scalping: scalpingSignal,
+                volume: volumeSignal,
+                momentum: momentumSignal
+            }
+        };
+    }
+
     // Follow Line stratejisi ile sinyal üretme
     generateFollowLineSignal(marketData, symbol) {
         console.log(`🎯 === PINE SCRIPT FOLLOW LINE STRATEJİSİ ===`);
@@ -852,8 +1445,45 @@ class TradingEngine {
         }
     }
 
+    // Dinamik Position Sizing - Risk bazlı miktar hesaplama
+    calculateDynamicPositionSize(symbol, signal, currentPrice) {
+        const baseBalance = 10000; // USDT
+        let riskPercentage = 0.05; // Başlangıç %5 risk
+
+        // Sinyal gücüne göre risk ayarla
+        if (signal.confidence > 0.8) {
+            riskPercentage = 0.12; // Yüksek güven -> %12 risk
+        } else if (signal.confidence > 0.6) {
+            riskPercentage = 0.08; // Orta güven -> %8 risk
+        } else if (signal.confidence > 0.5) {
+            riskPercentage = 0.05; // Düşük güven -> %5 risk
+        } else {
+            return 0; // Çok düşük güven -> trade yapma
+        }
+
+        // Volatilite bazlı ayarlama
+        if (symbol.includes('BTC')) {
+            riskPercentage *= 1.2; // BTC için biraz daha fazla
+        } else if (symbol.includes('ETH')) {
+            riskPercentage *= 1.1; // ETH için biraz daha fazla
+        } else if (symbol.includes('DOGE') || symbol.includes('SHIB')) {
+            riskPercentage *= 0.8; // Volatil altcoinler için daha az
+        }
+
+        const riskAmount = baseBalance * riskPercentage;
+        const positionSize = riskAmount / currentPrice;
+
+        console.log(`💰 Dinamik Position Sizing:`);
+        console.log(`   Güven Seviyesi: ${(signal.confidence * 100).toFixed(1)}%`);
+        console.log(`   Risk Yüzdesi: ${(riskPercentage * 100).toFixed(1)}%`);
+        console.log(`   Risk Miktarı: $${riskAmount.toFixed(2)}`);
+        console.log(`   Position Size: ${positionSize.toFixed(6)} ${symbol.split('/')[0]}`);
+
+        return positionSize;
+    }
+
     async runTradingStrategy() {
-        console.log('🎮 Sanal trading stratejisi başlatılıyor...');
+        console.log('🚀 Gelişmiş Multi-Strateji Trading başlatılıyor...');
 
         for (const pair of this.tradingPairs) {
             try {
@@ -862,21 +1492,31 @@ class TradingEngine {
                 // Market verilerini al (sanal modda)
                 const marketData = this.getSyntheticMarketData(pair);
                 
-                // Follow Line stratejisi ile sinyal üret
-                const followLineSignal = this.generateFollowLineSignal(marketData, pair);
+                // Gelişmiş Multi-Strateji analizi
+                const advancedSignal = this.generateAdvancedSignal(marketData, pair);
                 
-                console.log(`📈 ${pair} için sinyal: ${followLineSignal.signal} (Güven: ${followLineSignal.confidence.toFixed(2)})`);
-                console.log(`💰 Mevcut fiyat: $${followLineSignal.followLine?.toFixed(4) || 'N/A'}`);
+                console.log(`\n💰 Mevcut fiyat: $${this.getCurrentPrice(pair).toFixed(4)}`);
 
-                // Follow Line stratejisi ile trade kararı ver
-                if (followLineSignal.confidence > 0.1) {
-                    if (followLineSignal.signal === 'BUY') {
-                        await this.executeFollowLineBuySignal(pair, followLineSignal);
-                    } else if (followLineSignal.signal === 'SELL') {
-                        await this.executeFollowLineSellSignal(pair, followLineSignal);
+                // Gelişmiş strateji ile trade kararı ver
+                if (advancedSignal.confidence > 0.5) { // Daha yüksek eşik
+                    if (advancedSignal.signal === 'BUY') {
+                        await this.executeAdvancedBuySignal(pair, advancedSignal);
+                    } else if (advancedSignal.signal === 'SELL') {
+                        await this.executeAdvancedSellSignal(pair, advancedSignal);
                     }
                 } else {
-                    console.log(`⏸️ ${pair} için yeterli güven yok (${followLineSignal.confidence.toFixed(2)})`);
+                    console.log(`⏸️ ${pair} için yeterli güven yok (${(advancedSignal.confidence * 100).toFixed(1)}% < 50%)`);
+                    
+                    // Fallback: Eğer Follow Line tek başına güçlüyse 
+                    const followLineSignal = advancedSignal.details.followLine;
+                    if (followLineSignal.confidence > 0.6) {
+                        console.log(`🔄 Follow Line fallback aktif (${(followLineSignal.confidence * 100).toFixed(1)}%)`);
+                        if (followLineSignal.signal === 'BUY') {
+                            await this.executeFollowLineBuySignal(pair, followLineSignal);
+                        } else if (followLineSignal.signal === 'SELL') {
+                            await this.executeFollowLineSellSignal(pair, followLineSignal);
+                        }
+                    }
                 }
 
             } catch (error) {
@@ -884,10 +1524,140 @@ class TradingEngine {
             }
         }
 
-        // Sanal trading için stop loss ve take profit kontrolü
-        // await this.checkStopLossAndTakeProfit();
+        // Risk yönetimi kontrolleri
+        await this.checkAdvancedRiskManagement();
         
-        console.log('✅ Sanal trading stratejisi tamamlandı\n');
+        console.log('✅ Gelişmiş trading stratejisi tamamlandı\n');
+    }
+
+    // Gelişmiş BUY sinyali işleme
+    async executeAdvancedBuySignal(symbol, signal) {
+        try {
+            console.log(`🟢 ${symbol} için Multi-Strateji BUY - Sanal trade başlatılıyor...`);
+            
+            // Mevcut pozisyonu kontrol et
+            const currentPosition = this.getCurrentPosition(symbol);
+            if (currentPosition && currentPosition.amount > 0) {
+                console.log(`ℹ️ ${symbol} için zaten pozisyon var, yeni alım yapılmayacak`);
+                return;
+            }
+
+            // Dinamik position sizing
+            const currentPrice = this.getCurrentPrice(symbol);
+            const amount = this.calculateDynamicPositionSize(symbol, signal, currentPrice);
+
+            if (amount <= 0) {
+                console.log(`❌ ${symbol} için miktar hesaplanamadı veya çok düşük`);
+                return;
+            }
+
+            // Trade'i gerçekleştir
+            const trade = this.executeSyntheticTrade(symbol, 'BUY', amount, currentPrice);
+            
+            if (trade) {
+                // Gelişmiş Stop Loss ve Take Profit
+                this.createAdvancedStopLossAndTakeProfit(symbol, trade, signal);
+            }
+
+        } catch (error) {
+            console.error(`${symbol} Advanced BUY sinyali hatası:`, error.message);
+        }
+    }
+
+    // Gelişmiş SELL sinyali işleme
+    async executeAdvancedSellSignal(symbol, signal) {
+        try {
+            console.log(`🔴 ${symbol} için Multi-Strateji SELL - Pozisyon kontrol ediliyor...`);
+            
+            // Mevcut pozisyonu kontrol et
+            const currentPosition = this.getCurrentPosition(symbol);
+            if (!currentPosition || currentPosition.amount <= 0) {
+                console.log(`ℹ️ ${symbol} için açık pozisyon bulunamadı`);
+                return;
+            }
+
+            // Pozisyonu kapat
+            const trade = this.executeSyntheticTrade(symbol, 'SELL', currentPosition.amount);
+            
+            if (trade) {
+                console.log(`✅ ${symbol} pozisyonu Multi-Strateji ile kapatıldı`);
+                
+                // Kar/zarar hesapla
+                const buyPrice = currentPosition.price;
+                const sellPrice = trade.price;
+                const profit = (sellPrice - buyPrice) * currentPosition.amount;
+                const profitPercentage = ((sellPrice - buyPrice) / buyPrice) * 100;
+                
+                console.log(`💰 Trade Sonucu: ${profit > 0 ? 'KAR' : 'ZARAR'} $${Math.abs(profit).toFixed(2)} (${profitPercentage.toFixed(2)}%)`);
+            }
+
+        } catch (error) {
+            console.error(`${symbol} Advanced SELL sinyali hatası:`, error.message);
+        }
+    }
+
+    // Gelişmiş Risk Yönetimi
+    async checkAdvancedRiskManagement() {
+        console.log(`🛡️ Gelişmiş risk yönetimi kontrolü...`);
+        
+        // Portföy değeri kontrolü
+        const totalTrades = this.tradeHistory.length;
+        if (totalTrades > 0) {
+            const recentTrades = this.tradeHistory.slice(-10); // Son 10 trade
+            const lossTrades = recentTrades.filter(trade => {
+                const pos = this.getCurrentPosition(trade.symbol);
+                if (!pos) return false;
+                return trade.price > pos.price; // Alış fiyatından düşük
+            });
+
+            // Eğer son 10 trade'in %70'i zarar ediyorsa trading'i yavaşlat
+            if (lossTrades.length / recentTrades.length > 0.7) {
+                console.log(`⚠️ Risk Uyarısı: Son trade'lerin %${((lossTrades.length / recentTrades.length) * 100).toFixed(0)}'i zarar ediyor`);
+                console.log(`🔄 Trading stratejisi daha muhafazakar yapılacak`);
+                
+                // Bu durumda confidence eşiklerini artır
+                // (Bu gerçek uygulamada dynamic olarak ayarlanabilir)
+            }
+        }
+    }
+
+    // Gelişmiş Stop Loss ve Take Profit
+    createAdvancedStopLossAndTakeProfit(symbol, trade, signal) {
+        const currentPrice = trade.price;
+        const amount = trade.amount;
+        
+        // Multi-strateji güven seviyesine göre dinamik SL/TP
+        let stopLossPercentage = 3; // Başlangıç %3
+        let takeProfitPercentage = 6; // Başlangıç %6
+
+        // Yüksek güven -> Daha gevşek SL, daha yüksek TP
+        if (signal.confidence > 0.8) {
+            stopLossPercentage = 2;
+            takeProfitPercentage = 8;
+        } else if (signal.confidence > 0.6) {
+            stopLossPercentage = 2.5;
+            takeProfitPercentage = 7;
+        }
+
+        // Aktif strateji sayısına göre bonus
+        const strategyBonus = signal.activeStrategies.length * 0.5;
+        takeProfitPercentage += strategyBonus;
+
+        const stopLossPrice = currentPrice * (1 - stopLossPercentage / 100);
+        const takeProfitPrice = currentPrice * (1 + takeProfitPercentage / 100);
+        
+        console.log(`🛡️ Gelişmiş Risk Yönetimi: ${symbol}`);
+        console.log(`   Multi-Strateji Güven: ${(signal.confidence * 100).toFixed(1)}%`);
+        console.log(`   Aktif Strateji: ${signal.activeStrategies.length}/4`);
+        console.log(`   Alış fiyatı: $${currentPrice.toFixed(4)}`);
+        console.log(`   Stop Loss: $${stopLossPrice.toFixed(4)} (-${stopLossPercentage}%)`);
+        console.log(`   Take Profit: $${takeProfitPrice.toFixed(4)} (+${takeProfitPercentage.toFixed(1)}%)`);
+        
+        // Trade'e gelişmiş bilgileri ekle
+        trade.stopLoss = stopLossPrice;
+        trade.takeProfit = takeProfitPrice;
+        trade.multiStrategyConfidence = signal.confidence;
+        trade.activeStrategies = signal.activeStrategies;
     }
 
     // Follow Line Buy sinyali işleme

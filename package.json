@@ -6,7 +6,15 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "jest"
+    "test": "jest",
+    "pm2:start": "pm2 start ecosystem.config.js --env production",
+    "pm2:stop": "pm2 stop recall-trading-agent",
+    "pm2:restart": "pm2 restart recall-trading-agent",
+    "pm2:delete": "pm2 delete recall-trading-agent",
+    "pm2:logs": "pm2 logs recall-trading-agent",
+    "pm2:status": "pm2 status",
+    "pm2:monit": "pm2 monit",
+    "production": "pm2 start ecosystem.config.js --env production"
   },
   "dependencies": {
     "express": "^4.18.2",

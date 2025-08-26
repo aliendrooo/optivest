@@ -28,6 +28,7 @@ A sophisticated cryptocurrency trading bot with multiple technical analysis stra
 - **Multiple Trading Strategies**: Pine Script Follow Line, Bollinger Bands, RSI, MACD
 - **Real-time Data**: WebSocket connections to Binance for live price feeds
 - **Paper Trading**: Virtual trading with real market data
+- **Recall Network Integration**: Connect to Recall competition platform
 - **Risk Management**: Automatic Stop Loss and Take Profit
 - **Multi-coin Support**: Trade 10+ cryptocurrencies simultaneously
 - **Web Dashboard**: Modern responsive interface
